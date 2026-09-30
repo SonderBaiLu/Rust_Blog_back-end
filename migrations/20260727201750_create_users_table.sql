@@ -1,4 +1,4 @@
--- Add migration script here
+-- 用户（users）是主体
 create table if not exists users(
   id UUID primary key default gen_random_uuid(),
   name varchar(100) not null,
