@@ -59,7 +59,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-            AppError::ValidationError(e) => (StatusCode::BAD_GATEWAY, e.to_string()),
+            AppError::ValidationError(e) => (StatusCode::BAD_REQUEST, e.to_string()),
             AppError::Internal(msg) => {
                 error!("内部系统错误: {}", msg);
                 (

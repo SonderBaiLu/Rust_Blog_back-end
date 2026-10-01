@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/docs/文章模块与对象存储开发TODO.md" value="741609f4-a16c-4670-ac59-43bf30b22f99" />
     <file url="file://$PROJECT_DIR$/migrations/20260727201750_create_users_table.sql" value="741609f4-a16c-4670-ac59-43bf30b22f99" />
     <file url="file://$PROJECT_DIR$/migrations/20260926014947_create_posts_table.sql" value="741609f4-a16c-4670-ac59-43bf30b22f99" />
     <file url="file://$PROJECT_DIR$/migrations/20260926022843_post_collaborators.sql" value="741609f4-a16c-4670-ac59-43bf30b22f99" />

@@ -1,7 +1,7 @@
 use crate::{
     error::AppError,
     extractors::auth::AuthUser,
-    models::dto::user::{LoginReq, LoginResp, RegisterReq, UpdateUserRequest, UserResp},
+    modules::user::dto::{LoginReq, LoginResp, RegisterReq, UpdateUserRequest, UserResp},
     state::AppState,
 };
 use axum::{Json, extract::State};

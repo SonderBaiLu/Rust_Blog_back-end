@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/docs/文章模块与对象存储开发TODO.md" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/20260727201750_create_users_table.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/20260926014947_create_posts_table.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/20260926022843_post_collaborators.sql" dialect="PostgreSQL" />

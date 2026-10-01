@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::models::entity::user::User;
+use crate::modules::user::entity::User;
 
 // 用户注册请求
 #[derive(Debug, Deserialize, Validate)]

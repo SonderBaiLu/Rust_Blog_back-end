@@ -1,9 +1,8 @@
+pub mod bootstrap;
+pub mod common;
 pub mod error;
-pub mod handler;
-pub mod models;
-pub mod repository;
+pub mod extractors;
+pub mod modules;
 pub mod route;
-pub mod service;
 pub mod state;
 pub mod util;
-pub mod extractors;

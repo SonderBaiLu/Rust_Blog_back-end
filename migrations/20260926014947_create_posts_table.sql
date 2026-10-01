@@ -6,7 +6,7 @@ create table if not exists posts (
     summary varchar(500), -- 文章摘要
     content jsonb not null, -- 文章内容，jsonb 格式
     cover_image varchar(500), -- 封面图片地址
-      boolean not null default false, --
+    is_published boolean not null default false, --
     created_at timestamptz not null default now(), -- 创建时间
     updated_at timestamptz not null default now(), -- 更新时间
     deleted_at timestamptz -- 软删除时间，为空表示未作者 id，外键引用 users(id)，删除用户时级联删除删除

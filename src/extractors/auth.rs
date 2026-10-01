@@ -14,7 +14,7 @@ pub struct AuthUser {
 
 impl<S> FromRequestParts<S> for AuthUser
 where
-// 约束：传入的 State 必须能提取出 String (即 jwt_secret)
+    // 约束：传入的 State 必须能提取出 String (即 jwt_secret)
     String: FromRef<S>,
     S: Send + Sync,
 {

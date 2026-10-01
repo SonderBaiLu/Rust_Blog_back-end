@@ -3,9 +3,9 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    models::{
-        dto::user::{RegisterReq, UpdateUserRequest},
-        entity::user::User,
+    modules::user::{
+        dto::{RegisterReq, UpdateUserRequest},
+        entity::User,
     },
 };
 // 持久层
@@ -18,5 +18,5 @@ pub trait UserRepository: Send + Sync {
     // 创建新用户
     async fn create_user(&self, req: &RegisterReq, password_hash: &str) -> Result<User, AppError>;
     // 用户信息局部更新
-    async fn update_user_Info(&self, id: Uuid, req: &UpdateUserRequest) -> Result<User, AppError>;
+    async fn update_user_info(&self, id: Uuid, req: &UpdateUserRequest) -> Result<User, AppError>;
 }

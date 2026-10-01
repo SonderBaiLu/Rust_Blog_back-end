@@ -1,21 +1,17 @@
 use dotenvy::dotenv;
+use rust_blog::bootstrap::{bootstrap, AppConfig};
 use rust_blog::route;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use rust_blog::{
-    repository::postgres::user_repo::PgUserRepository, service::UserService, state::AppState,
-};
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. 加载 .env
+    // 1. 加载环境变量
     dotenv().ok();
 
-    // 2. 初始化 tracing
+    // 2. 初始化结构化日志 tracing
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -23,12 +19,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_file(true) // 显示打印日志文件名
-                .with_line_number(true) // 显示代码行号
-                .with_target(true), // 显示模块路径
+                .with_file(true)
+                .with_line_number(true)
+                .with_target(true),
         )
         .init();
-    // 3. 读取环境变量
+
+    // 3. 读取关键环境变量
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
     let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set in .env file");
 
@@ -39,16 +36,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     info!("PostgreSQL 数据库连接成功");
 
-    // 4. 依赖注入 (DI)
-    let user_repo = Arc::new(PgUserRepository::new(pool));
-    // 传入 jwt_secret
-    let user_service = UserService::new(user_repo, jwt_secret.clone());
-    // 传入 jwt_secret
-    let state = AppState::new(user_service, jwt_secret);
+    // 4. 集中装配依赖链（Repository → Service → AppState）
+    let state = bootstrap(pool, AppConfig { jwt_secret });
+
     // 5. 挂载路由
     let app = route::create_app(state);
 
-    // 6. 启动 Axum Web
+    // 6. 启动 Axum Web 服务
     let addr = SocketAddr::from(([127, 0, 0, 1], 3456));
     info!("服务已启动在 http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
