@@ -1,19 +1,16 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::extract::Path;
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     error::AppError,
     extractors::AuthUser,
-    modules::post::dto::CreatePostRequest,
+    modules::post::dto::{CreatePostRequest, UpdatePostRequest},
     state::AppState,
 };
 
-/// 创建文章接口：POST /api/posts
+/// 创建文章接口：POST /api/v1/posts
 pub async fn create_post(
     State(state): State<AppState>,
     // 注入鉴权提取器，获取当前已登录用户的上下文身份
@@ -32,4 +29,20 @@ pub async fn create_post(
 
     // 4. 返回 201 CREATED 及序列化后的响应 DTO
     Ok((StatusCode::CREATED, Json(post_resp)))
+}
+// 更新文章接口：PATCH /api/v1/posts/{id}
+pub async fn update_post(
+    State(state): State<AppState>,
+    // 获取文章ID，path 获取URL中的id
+    Path(post_id): Path<Uuid>,
+    // 鉴权提取器
+    auth_user: AuthUser,
+    Json(req): Json<UpdatePostRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // 翻出校验
+    req.validate()?;
+    // 2. 调用业务服务层
+    let resp = state.post_service.update_post(auth_user.id, post_id, &req).await?;
+    // 3. 返回 200 OK 与 JSON 载荷
+    Ok(Json(resp))
 }

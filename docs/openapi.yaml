@@ -1,0 +1,758 @@
+openapi: 3.0.3
+info:
+  title: Rust Blog API
+  version: 0.1.0
+  description: |
+    Rust 博客学习项目的后端接口文档（Axum 0.8）。
+
+    ## 鉴权说明
+    - 除「注册 / 登录」外，所有接口均需要在请求头携带 JWT：
+      `Authorization: Bearer <token>`
+    - Token 通过登录接口获取，有效期 **24 小时**（HS256 签名）。
+    - Token 失效或缺失时返回 `401`，格式见 `ErrorResponse`。
+
+    ## 统一错误格式
+    所有错误均返回 JSON：
+    ```json
+    { "code": 400, "error": "Bad Request", "message": "具体错误信息" }
+    ```
+
+    ## 统一分页
+    列表接口统一返回 `items / page / per_page / total / total_pages` 结构；
+    入参 `page` 默认 1，`per_page` 默认 10 且会被钳制在 1~100。
+servers:
+  - url: http://127.0.0.1:3456
+    description: 本地开发环境
+tags:
+  - name: 用户模块
+    description: 注册、登录、当前用户信息查询与修改
+  - name: 文章模块
+    description: 文章创建与更新（列表 / 详情等接口开发中）
+  - name: 待办模块
+    description: 待办事项 CRUD（软删除）与分页列表
+
+paths:
+  /api/v1/users/register:
+    post:
+      tags: [用户模块]
+      operationId: register
+      summary: 用户注册
+      description: |
+        创建新用户。邮箱若填写则会做唯一性校验，重复时返回 400「该邮箱已被注册」。
+        注册成功后需另行调用登录接口获取 Token。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterReq'
+            examples:
+              normal:
+                summary: 常规注册
+                value:
+                  name: 张三
+                  password: abc123456
+                  email: zhangsan@example.com
+              noEmail:
+                summary: 不填邮箱
+                value:
+                  name: lisi
+                  password: abc123456
+      responses:
+        '200':
+          description: 注册成功，返回脱敏后的用户信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResp'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/users/login:
+    post:
+      tags: [用户模块]
+      operationId: login
+      summary: 用户登录
+      description: |
+        邮箱 + 密码登录。成功后返回 JWT Token（有效期 24 小时）与用户信息。
+        账号不存在或密码错误统一返回 401「账号或密码错误」。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginReq'
+            example:
+              email: zhangsan@example.com
+              password: abc123456
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResp'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI1ZjFh...
+                user:
+                  id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  name: 张三
+                  email: zhangsan@example.com
+                  email_verified: false
+                  phone: null
+                  is_active: true
+                  created_at: '2026-10-01T08:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/users/me:
+    get:
+      tags: [用户模块]
+      operationId: getMe
+      summary: 获取当前登录用户信息
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 当前用户信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [用户模块]
+      operationId: updateMe
+      summary: 修改当前用户信息（局部更新）
+      description: 仅支持修改用户名，字段可省略；后续会扩展更多可修改字段。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              name: 新名字
+      responses:
+        '200':
+          description: 修改后的用户信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResp'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/posts:
+    post:
+      tags: [文章模块]
+      operationId: createPost
+      summary: 创建文章
+      description: |
+        创建一篇新文章，作者强制取自 Token 中的用户 ID（防止越权）。
+        `content` 为富文本 JSON（如编辑器产出的 AST / JSON 文档）。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+            example:
+              title: 我的第二篇文章
+              summary: 简介内容
+              content:
+                type: doc
+                content: []
+              cover_image: 'https://example.com/cover.png'
+              is_published: false
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/posts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 文章 ID（UUID）
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [文章模块]
+      operationId: updatePost
+      summary: 更新文章（局部更新）
+      description: |
+        仅更新传入的字段，未传入的字段保持不变。
+        文章须属于当前登录用户，否则返回 403；文章不存在时返回 404。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePostRequest'
+            example:
+              title: 修改后的标题
+              is_published: true
+      responses:
+        '200':
+          description: 更新后的文章
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/todos:
+    post:
+      tags: [待办模块]
+      operationId: createTodo
+      summary: 创建待办
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTodoRequest'
+            example:
+              title: 读完 Rust Book 第 10 章
+              description: 重点看 trait 与泛型
+              repeat_type: none
+              due_date: '2026-10-15'
+              priority: 2
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [待办模块]
+      operationId: listTodos
+      summary: 分页查询待办列表
+      description: 仅返回当前登录用户的待办，可按完成状态过滤。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: 页码，从 1 开始，默认 1
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          description: 每页条数，默认 10，会被钳制在 1~100
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: is_completed
+          in: query
+          required: false
+          description: 按完成状态过滤；不传则返回全部
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTodoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/todos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 待办 ID（UUID）
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [待办模块]
+      operationId: getTodo
+      summary: 查询待办详情
+      description: 只能查询自己的待办，否则返回 404。
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 待办详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [待办模块]
+      operationId: updateTodo
+      summary: 更新待办（局部更新）
+      description: 所有字段均可选，只更新传入的字段。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTodoRequest'
+            example:
+              is_completed: true
+      responses:
+        '200':
+          description: 更新后的待办
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [待办模块]
+      operationId: deleteTodo
+      summary: 删除待办（软删除）
+      description: 逻辑删除，成功返回 204 无内容。
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: 删除成功，无响应体
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 登录接口返回的 JWT，有效期 24 小时，格式 `Bearer <token>`
+  responses:
+    BadRequest:
+      description: 请求参数错误 / 业务校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            error: Bad Request
+            message: 用户名长度须在2-20个字符之间
+    Unauthorized:
+      description: 未登录 / Token 无效或过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            error: Unauthorized
+            message: 无效或已过期的 Token
+    NotFound:
+      description: 资源不存在（或无权访问他人资源）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            error: Not Found
+            message: 资源不存在：待办不存在
+    Forbidden:
+      description: 已登录但无权操作该资源
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            error: Forbidden
+            message: 无权操作该资源
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 500
+            error: Internal Server Error
+            message: 服务器内部错误
+  schemas:
+    # ---------- 通用 ----------
+    ErrorResponse:
+      type: object
+      description: 统一错误响应体
+      properties:
+        code:
+          type: integer
+          description: HTTP 状态码
+          example: 400
+        error:
+          type: string
+          description: 状态码英文短语（canonical reason）
+          example: Bad Request
+        message:
+          type: string
+          description: 具体错误信息（中文）
+          example: 请求参数错误
+      required: [code, error, message]
+
+    # ---------- 用户模块 ----------
+    RegisterReq:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 用户名，2~20 个字符；仅允许字母、数字、中文、下划线、减号
+          minLength: 2
+          maxLength: 20
+          example: 张三
+        password:
+          type: string
+          description: 明文密码，至少 6 位（服务端使用 Argon2 哈希存储）
+          minLength: 6
+          example: abc123456
+        email:
+          type: string
+          format: email
+          description: 邮箱，可选；填写时做唯一性校验
+          nullable: true
+          example: zhangsan@example.com
+      required: [name, password]
+
+    LoginReq:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: 登录邮箱
+          example: zhangsan@example.com
+        password:
+          type: string
+          description: 登录密码（不能为空）
+          example: abc123456
+      required: [email, password]
+
+    LoginResp:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT Token，有效期 24 小时，后续请求放入 Authorization 头
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI1ZjFh...
+        user:
+          $ref: '#/components/schemas/UserResp'
+      required: [token, user]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 新用户名，2~20 个字符；仅允许字母、数字、中文、下划线、减号
+          minLength: 2
+          maxLength: 20
+          example: 新名字
+
+    UserResp:
+      type: object
+      description: 用户信息（脱敏后，不含密码哈希）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        name:
+          type: string
+          description: 用户名
+        email:
+          type: string
+          description: 邮箱
+        email_verified:
+          type: boolean
+          description: 邮箱是否已验证（默认 false）
+        phone:
+          type: string
+          nullable: true
+          description: 手机号，可为空
+        is_active:
+          type: boolean
+          description: 账号是否活跃
+        created_at:
+          type: string
+          format: date-time
+          description: 注册时间（UTC）
+      required: [id, name, email, email_verified, phone, is_active, created_at]
+
+    # ---------- 文章模块 ----------
+    CreatePostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 文章标题，1~200 字符
+          minLength: 1
+          maxLength: 200
+        summary:
+          type: string
+          description: 摘要，0~500 字符
+          maxLength: 500
+          nullable: true
+        content:
+          description: 文章正文，富文本 JSON（编辑器 AST / JSON 文档），结构自定义
+        cover_image:
+          type: string
+          format: uri
+          description: 封面图 URL，可选，需为合法 URL
+          nullable: true
+        is_published:
+          type: boolean
+          description: 是否发布
+      required: [title, content, is_published]
+
+    PostResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 文章 ID
+        author_id:
+          type: string
+          format: uuid
+          description: 作者用户 ID
+        title:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        content:
+          description: 富文本 JSON 正文
+        cover_image:
+          type: string
+          nullable: true
+        is_published:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, author_id, title, summary, content, cover_image, is_published, created_at, updated_at]
+
+    UpdatePostRequest:
+      type: object
+      description: 文章更新请求（局部更新，所有字段可选，只更新传入的字段）
+      properties:
+        title:
+          type: string
+          description: 文章标题，1~200 字符
+          minLength: 1
+          maxLength: 200
+        summary:
+          type: string
+          description: 摘要，0~500 字符
+          maxLength: 500
+          nullable: true
+        content:
+          description: 文章正文，富文本 JSON（编辑器 AST / JSON 文档），结构自定义
+        cover_image:
+          type: string
+          format: uri
+          description: 封面图 URL，可选，需为合法 URL
+          nullable: true
+        is_published:
+          type: boolean
+          description: 是否发布
+
+    # ---------- 待办模块 ----------
+    CreateTodoRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 待办标题，1~200 字符
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          description: 详细描述，最长 1000 字符
+          maxLength: 1000
+          nullable: true
+        repeat_type:
+          type: string
+          description: 重复类型，不传时默认 none
+          example: none
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          description: 截止日期（YYYY-MM-DD）
+          nullable: true
+          example: '2026-10-15'
+        priority:
+          type: integer
+          format: int32
+          description: 优先级，取值 0~3
+          minimum: 0
+          maximum: 3
+          nullable: true
+      required: [title]
+
+    UpdateTodoRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 待办标题，1~200 字符
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+        repeat_type:
+          type: string
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        priority:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3
+          nullable: true
+        is_completed:
+          type: boolean
+          description: 是否已完成（置为 true 时服务端会记录完成时间）
+
+    TodoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 待办 ID
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        repeat_type:
+          type: string
+          description: 重复类型（缺省 none）
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        is_completed:
+          type: boolean
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 完成时间，未完成为 null
+        completed_count:
+          type: integer
+          format: int32
+          description: 重复待办的累计完成次数
+        priority:
+          type: integer
+          format: int32
+          description: 优先级 0~3
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, title, description, repeat_type, due_date, is_completed, completed_at, completed_count, priority, created_at, updated_at]
+
+    PaginatedTodoResponse:
+      type: object
+      description: 统一分页响应包装
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodoResponse'
+        page:
+          type: integer
+          format: int32
+          description: 当前页码
+          example: 1
+        per_page:
+          type: integer
+          format: int32
+          description: 每页条数
+          example: 10
+        total:
+          type: integer
+          format: int64
+          description: 总条数
+          example: 42
+        total_pages:
+          type: integer
+          format: int32
+          description: 总页数
+          example: 5
+      required: [items, page, per_page, total, total_pages]

@@ -1,7 +1,4 @@
-use axum::{
-    Router,
-    routing::{delete, get, patch, post},
-};
+use axum::{Router, routing::{get, post}};
 
 use crate::state::AppState;
 

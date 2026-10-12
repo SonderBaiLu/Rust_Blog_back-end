@@ -3,7 +3,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::error::AppError;
-use crate::modules::post::dto::{CreatePostRequest, PostResponse};
+use crate::modules::post::dto::{CreatePostRequest, PostResponse, UpdatePostRequest};
 use crate::modules::post::repository::PostRepository;
 
 #[derive(Clone)]
@@ -35,6 +35,19 @@ impl PostService {
         );
 
         // 3. 实体转安全响应 DTO 并返回
+        Ok(PostResponse::from(post))
+    }
+    // 更新文章业务
+    #[tracing::instrument(skip(self, req))]
+    pub async fn update_post(
+        &self,
+        author_id: Uuid,
+        post: Uuid,
+        req: &UpdatePostRequest,
+    ) -> Result<PostResponse, AppError> {
+        let post = self.post_repo.update_post(post, author_id, req).await?;
+        // 日志
+        info!(post_id = %post.id, author_id = %author_id, "文章更新成功");
         Ok(PostResponse::from(post))
     }
 }

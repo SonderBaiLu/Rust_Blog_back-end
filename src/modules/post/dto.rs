@@ -32,6 +32,18 @@ pub struct PostResponse {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+// 文章更新请求
+#[derive(Debug, Deserialize ,Validate)]
+pub struct UpdatePostRequest{
+    #[validate(length(min = 1, max = 200))]
+    pub title: Option<String>,
+    #[validate(length(min = 0, max = 500))]
+    pub summary: Option<String>,
+    pub content: Option<serde_json::Value>,
+    #[validate(url)]
+    pub cover_image: Option<String>,
+    pub is_published: Option<bool>,
+}
 
 // From<T> 是Rust 标准库提供的值转Trait
 // 用于定义类型A 到 类型B 的五岁类型转换

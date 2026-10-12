@@ -20,7 +20,7 @@ pub struct AppConfig {
 
 /// 集中装配所有依赖链：Repository → Service → AppState。
 ///
-/// `main.rs` 只负责「读环境变量 → 建连接池」，真正的依赖注入收敛在这里，
+/// `main.rs` 只负责「读环境变量 → 建连接池」，真正地依赖注入收敛在这里，
 /// 新增模块时只改这一个函数，避免在 main 里散落 30 行手工装配。
 pub fn bootstrap(pool: PgPool, config: AppConfig) -> AppState {
     // 用户体系依赖链
