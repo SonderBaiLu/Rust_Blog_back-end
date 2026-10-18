@@ -11,6 +11,9 @@ use crate::{error::AppError, util::jwt::verify_token};
 pub struct AuthUser {
     pub id: Uuid,
 }
+// 登录用户身份凭证 在游客的身份下访问
+#[derive(Debug,Clone)]
+pub struct OptionalAuthUser(pub Option<AuthUser>);
 
 impl<S> FromRequestParts<S> for AuthUser
 where
@@ -21,7 +24,6 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        // 1. 从 请求头 中获取 Authorization 字段，使用 ? 运算符处理错误
         let auth_header = parts
             .headers
             .get(AUTHORIZATION)
@@ -51,3 +53,27 @@ where
         Ok(AuthUser { id: user_id })
     }
 }
+
+// TODO: 删了重写
+impl<S> FromRequestParts<S> for OptionalAuthUser
+where
+    String: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // 检查是否存在 Authorization 请求头
+        if parts.headers.get(AUTHORIZATION).is_none() {
+            // 未携带请求头：判定为合法游客身份，直接返回 None
+            return Ok(OptionalAuthUser(None));
+        }
+        // 存在请求头：直接委托给 AuthUser 现有的提取逻辑
+        // 若非 Bearer 格式或 Token 签名/过期校验失败，此处直接向上冒泡 AppError::Unauthorized
+        let auth_user = AuthUser::from_request_parts(parts, state).await?;
+        // 3. 校验通过，包装为登录用户身份返回
+        Ok(OptionalAuthUser(Some(auth_user)))
+    }
+}
+
+

@@ -2,6 +2,8 @@
 
 > 本文档是「文章核心管理」「对象存储媒体直传」两大既有模块，以及「音乐播放器 / Todo 清单 / 语录集 / 阅读清单 / Anki / 留言墙 / 足迹 / 项目页 / 习惯打卡 / 目标管理 / 番茄钟 / 统计面板 / 数据导出 / 联系页 / 个人资料 / 安全设置」等后续功能模块的逐项开发清单。
 > 所有命名、路径、错误类型、分层约定均对齐当前代码库。
+> 状态：`[x]` = 代码已实现（2026-10-15 对照 `src/modules/post/`、`src/common/` 核对后勾选）；
+> 带「待修 / 待验证」备注的条目是部分完成，先看备注再动手。
 
 ## 目录
 
@@ -19,29 +21,25 @@
 | 分层 | 文件路径 | 说明 |
 | --- | --- | --- |
 | 鉴权提取器 | `src/extractors/auth.rs` | 已存在 `AuthUser`，需新增 `OptionalAuthUser` |
-| 持久层契约 | `src/repository/post.rs` | `PostRepository` trait |
-| Pg 实现 | `src/repository/postgres/post_repo.rs` | `PgPostRepository` |
-| 实体 | `src/models/entity/post.rs` | `Post`、`PostCollaborator` |
-| 请求 / 响应 DTO | `src/models/dto/post.rs` | `CreatePostRequest`、`PostResponse` |
+| post 模块（全五层） | `src/modules/post/` | `entity` / `dto` / `repository`(契约) / `postgres`(实现) / `service` / `handler` / `route` |
+| 通用分页 | `src/common/mod.rs` | `PaginationQuery`、`Paginated<T>`（已完成） |
 | 统一错误 | `src/error.rs` | `AppError` 枚举 |
-| 业务层 | `src/service/post_service.rs` | `PostService` |
-| 处理器 | `src/handler/post_handler.rs` | 各端点处理器 |
-| 路由 | `src/route/post_route.rs` | 统一前缀 `/api/v1/posts` |
+| 路由装配 | `src/route/mod.rs` | 各模块挂在 `/api/v1/...` 下 |
 | 全局状态 | `src/state.rs` | `AppState` |
 
 ### 通用分层约定（新增模块一律遵循）
 
-每个新功能模块按固定五层拆分，命名与路径对齐现有代码：
+每个新功能模块放在 `src/modules/<模块名>/` 下，按固定五层拆分，命名对齐现有代码（以 post 模块为参照）：
 
-| 层 | 命名 | 示例路径 |
+| 层 | 命名 | 路径（xxx = 模块名） |
 | --- | --- | --- |
-| 实体 | `Xxx` | `src/models/entity/xxx.rs` |
-| DTO | `CreateXxxRequest` / `XxxResponse` / `XxxQuery` | `src/models/dto/xxx.rs` |
-| 契约 | `XxxRepository` trait | `src/repository/xxx.rs` |
-| 实现 | `PgXxxRepository` | `src/repository/postgres/xxx_repo.rs` |
-| 业务 | `XxxService` | `src/service/xxx_service.rs` |
-| 处理器 | `xxx_handler.rs` | `src/handler/xxx_handler.rs` |
-| 路由 | `xxx_route.rs` | `src/route/xxx_route.rs` |
+| 实体 | `Xxx` | `src/modules/xxx/entity.rs` |
+| DTO | `CreateXxxRequest` / `XxxResponse` / `XxxQuery` | `src/modules/xxx/dto.rs` |
+| 契约 | `XxxRepository` trait | `src/modules/xxx/repository.rs` |
+| 实现 | `PgXxxRepository` | `src/modules/xxx/postgres.rs` |
+| 业务 | `XxxService` | `src/modules/xxx/service.rs` |
+| 处理器 | `xxx_handler` | `src/modules/xxx/handler.rs` |
+| 路由 | `xxx_route` | `src/modules/xxx/route.rs` |
 
 ---
 
@@ -51,17 +49,17 @@
 
 ### 0.1 数据库迁移基础设施
 
-- [ ] 统一迁移命名规范：`YYYYMMDDHHMMSS_<snake_case>.sql`（与现有 `sqlx` 迁移一致）。
-- [ ] 所有新表遵循软删除约定：`deleted_at timestamptz`，查询时统一 `AND deleted_at IS NULL`。
-- [ ] 所有外键明确 `ON DELETE` 行为（`CASCADE` / `SET NULL` / `RESTRICT`）。
-- [ ] 统一时间字段：`created_at` / `updated_at` 均 `timestamptz not null default now()`。
+- [x] 统一迁移命名规范：`YYYYMMDDHHMMSS_<snake_case>.sql`（与现有 `sqlx` 迁移一致）。
+- [x] 所有新表遵循软删除约定：`deleted_at timestamptz`，查询时统一 `AND deleted_at IS NULL`。
+- [x] 所有外键明确 `ON DELETE` 行为（`CASCADE` / `SET NULL` / `RESTRICT`）。
+- [x] 统一时间字段：`created_at` / `updated_at` 均 `timestamptz not null default now()`。
 
 ### 0.2 定时任务调度器
 
 - [ ] 引入调度依赖（二选一并记录）：
   - [ ] `tokio-cron-scheduler`：支持 cron 表达式，可动态增删任务，推荐。
   - [ ] 自研简单调度：基于 `tokio::time` + 数据库轮询，可控性高但代码量大。
-- [ ] 新增 `SchedulerService`（`src/service/scheduler_service.rs`）：
+- [ ] 新增 `SchedulerService`（`src/modules/scheduler/service.rs`，按模块约定新建）：
   - [ ] 启动时从数据库加载「到期时间在未来的提醒/打卡」注册定时任务。
   - [ ] 提供 `schedule_at(task_id, at: DateTime<Utc>, payload)` 动态注册单次任务。
   - [ ] 提供 `cancel(task_id)` 撤销任务。
@@ -102,7 +100,7 @@ create index idx_notifications_user on notifications(user_id, created_at desc);
 
 ### 0.5 统一分页与通用响应
 
-- [ ] 新增 `Paginated<T>` 通用分页结构体（`src/models/dto/mod.rs`）：
+- [x] 新增 `Paginated<T>` 通用分页结构体（已实现在 `src/common/mod.rs`）：
 
 ```rust
 #[derive(Debug, Serialize)]
@@ -115,8 +113,8 @@ pub struct Paginated<T> {
 }
 ```
 
-- [ ] 新增通用 `PaginationQuery`（`page`、`per_page`，含默认值与边界钳制）。
-- [ ] 各列表接口统一返回 `Paginated<T>`，避免每个模块重复定义。
+- [x] 新增通用 `PaginationQuery`（`page`、`per_page`，含默认值与边界钳制，已实现在 `src/common/mod.rs`）。
+- [x] 各列表接口统一返回 `Paginated<T>`，避免每个模块重复定义（todo 模块已在用）。
 
 ### 0.6 离线优先与多端同步（对接 App / 桌面端储备）
 
@@ -176,39 +174,39 @@ outbox(id TEXT PRIMARY KEY, entity TEXT, op TEXT, payload TEXT, created_at ...)
 
 #### 1.1.1 提取器扩展（基础设施层）
 
-- [ ] 在 `src/extractors/auth.rs` 中新增 `OptionalAuthUser` 提取器：
+- [x] 在 `src/extractors/auth.rs` 中新增 `OptionalAuthUser` 提取器：
 
 ```rust
 #[derive(Debug, Clone)]
 pub struct OptionalAuthUser(pub Option<AuthUser>);
 ```
 
-- [ ] 实现 `FromRequestParts<S>`，三种情形：
-  - [ ] 未携带 `Authorization` 请求头：返回 `Ok(OptionalAuthUser(None))`，不报错。
-  - [ ] 携带 `Authorization` 但非 `Bearer ` 前缀或 Token 校验失败：返回 `AppError::Unauthorized`。
-  - [ ] 携带合法 Token：解析出 `Some(AuthUser)`。
-- [ ] 在 `src/extractors/mod.rs` 中导出：`pub use auth::{AuthUser, OptionalAuthUser};`
+- [x] 实现 `FromRequestParts<S>`，三种情形：
+  - [x] 未携带 `Authorization` 请求头：返回 `Ok(OptionalAuthUser(None))`，不报错。
+  - [x] 携带 `Authorization` 但非 `Bearer ` 前缀或 Token 校验失败：返回 `AppError::Unauthorized`。
+  - [x] 携带合法 Token：解析出 `Some(AuthUser)`。
+- [x] 在 `src/extractors/mod.rs` 中导出：`pub use auth::{AuthUser, OptionalAuthUser};`
 - [ ] 编写单元测试覆盖三种情形（无 Header / 非法 Token / 合法 Token）。
 
 #### 1.1.2 持久层契约与 SQL（Repository 层）
 
-- [ ] 在 `src/repository/post.rs` 的 `PostRepository` trait 中新增契约：
+- [x] 在 `src/modules/post/repository.rs` 的 `PostRepository` trait 中新增契约：
 
 ```rust
 async fn find_by_id(&self, id: Uuid) -> Result<Option<Post>, AppError>;
 ```
 
-- [ ] 在 `src/repository/postgres/post_repo.rs` 中实现，使用 `sqlx::query_as::<_, Post>` + `.fetch_optional`：
+- [ ] 在 `src/modules/post/postgres.rs` 中实现，使用 `sqlx::query_as::<_, Post>` + `.fetch_optional`（实现已写，但 SQL 里列名笔误：`delete_at` 应为 `deleted_at`，先改这个）：
 
 ```sql
 SELECT * FROM posts WHERE id = $1 AND deleted_at IS NULL
 ```
 
-- [ ] `None` 表示不存在或已软删除。
+- [x] `None` 表示不存在或已软删除。
 
 #### 1.1.3 权限矩阵判定（Service 层）
 
-- [ ] 在 `src/service/post_service.rs` 新增：
+- [x] 在 `src/modules/post/service.rs` 新增：
 
 ```rust
 pub async fn get_post_by_id(
@@ -219,27 +217,27 @@ pub async fn get_post_by_id(
 ```
 
 - [ ] 实现可见性决策树（顺序判断，命中即返回）：
-  - [ ] 先 `find_by_id(id)`，`None` 返回 `AppError::NotFound("文章不存在")`。
-  - [ ] `is_published == true`：直接允许读取。
-  - [ ] `is_published == false` 且 `viewer == None`：统一返回 `NotFound`，规避信息泄露。
-  - [ ] `is_published == false` 且 `viewer.id == author_id`（作者本人）：允许读取。
+  - [x] 先 `find_by_id(id)`，`None` 返回 `AppError::NotFound("文章不存在")`。
+  - [x] `is_published == true`：直接允许读取。
+  - [x] `is_published == false` 且 `viewer == None`：统一返回 `NotFound`，规避信息泄露。
+  - [x] `is_published == false` 且 `viewer.id == author_id`（作者本人）：允许读取。
   - [ ] 进阶：`viewer.id` 命中 `post_collaborators` 且 `role` 有效：允许读取。
-  - [ ] 其余情况：返回 `NotFound`。
+  - [x] 其余情况：返回 `NotFound`。
 - [ ] 用 `info!` 记录「读取通过 / 被拒」链路日志（含 `post_id`、`viewer_id`、`reason`）。
 - [ ] 为决策树编写单元测试（公开 / 私密匿名 / 私密作者 / 私密协作者 / 私密非协作者）。
 
 #### 1.1.4 端点暴露（Handler & Route 层）
 
-- [ ] 在 `src/handler/post_handler.rs` 新增 `get_post_by_id`：
+- [ ] 在 `src/modules/post/handler.rs` 新增 `get_post_by_id`（函数已写，但提取器写成了 `Option<AuthUser>` 编译不过，需先换成 `OptionalAuthUser`）：
   - [ ] 提取 `Path(id): Path<Uuid>`、`State`、`optional_user: OptionalAuthUser`。
   - [ ] 调用 `state.post_service.get_post_by_id(optional_user.0, id)`。
-- [ ] 在 `src/route/post_route.rs` 挂载：
+- [x] 在 `src/modules/post/route.rs` 挂载：
 
 ```rust
 .route("/{id}", get(post_handler::get_post_by_id))
 ```
 
-- [ ] 确认最终路由为 `GET /api/v1/posts/:id`。
+- [x] 确认最终路由为 `GET /api/v1/posts/:id`。
 
 ---
 
@@ -247,7 +245,7 @@ pub async fn get_post_by_id(
 
 #### 1.2.1 输入契约设计（DTO 层）
 
-- [ ] 在 `src/models/dto/post.rs` 新增 `UpdatePostRequest`，全部字段 `Option`，仅更新非空项：
+- [x] 在 `src/modules/post/dto.rs` 新增 `UpdatePostRequest`，全部字段 `Option`，仅更新非空项：
 
 ```rust
 #[derive(Debug, Deserialize, Validate)]
@@ -270,13 +268,13 @@ pub struct UpdatePostRequest {
 
 #### 1.2.2 原子化局部更新（Repository 层）
 
-- [ ] 在 `PostRepository` trait 中新增契约：
+- [x] 在 `PostRepository` trait 中新增契约：
 
 ```rust
 async fn update_post(&self, id: Uuid, req: &UpdatePostRequest) -> Result<Post, AppError>;
 ```
 
-- [ ] 在 `PgPostRepository` 中用 `COALESCE` 动态 SQL 实现：
+- [x] 在 `PgPostRepository` 中用 `COALESCE` 动态 SQL 实现：
 
 ```sql
 UPDATE posts
@@ -292,16 +290,16 @@ RETURNING *
 ```
 
 - [ ] 参数绑定说明：
-  - [ ] `title` / `summary` / `cover_image`：绑定 `Option<String>`。
-  - [ ] `content`：绑定 `Option<serde_json::Value>`，映射 JSONB。
-  - [ ] `is_published`：绑定 `Option<bool>`。
-  - [ ] `id`：绑定 `Uuid`。
-- [ ] 使用 `sqlx::query_as::<_, Post>` + `.fetch_one`，行不存在时映射为 `NotFound`。
+  - [x] `title` / `summary` / `cover_image`：绑定 `Option<String>`。
+  - [x] `content`：绑定 `Option<serde_json::Value>`，映射 JSONB。
+  - [x] `is_published`：绑定 `Option<bool>`。
+  - [x] `id`：绑定 `Uuid`。
+- [ ] 使用 `sqlx::query_as::<_, Post>` + `.fetch_one`，行不存在时映射为 `NotFound`（目前行不存在会直接 `fetch_one` 报错，需映射成 `NotFound`，并检查 `src/error.rs` 对 `RowNotFound` 的处理）：
 - [ ] 确认 `Option<serde_json::Value>` 的 sqlx `Encode` 兼容性。
 
 #### 1.2.3 修改权限审计（Service 层）
 
-- [ ] 在 `PostService` 新增：
+- [x] 在 `PostService` 新增：
 
 ```rust
 pub async fn update_post(
@@ -313,28 +311,28 @@ pub async fn update_post(
 ```
 
 - [ ] 先 `find_by_id(id)`，`None` 返回 `NotFound`。
-- [ ] 校验操作人身份（修改权限，比读取更严格）：
+- [ ] 校验操作人身份（修改权限，比读取更严格）（目前检查藏在 SQL `where author_id` 里，Service 层没有显式校验，也不会返回 `Forbidden`）：
   - [ ] `operator_id == author_id`（作者）：允许。
   - [ ] 进阶：`operator_id` 在 `post_collaborators` 且 `role` 为 `editor` 或 `admin`：允许。
   - [ ] 否则：返回 `AppError::Forbidden("无权编辑该文章")`。
-- [ ] 通过后调用 `update_post` 落库。
-- [ ] 记录审计日志：`info!(post_id, operator_id, fields_changed, "文章更新成功")`。
+- [x] 通过后调用 `update_post` 落库。
+- [ ] 记录审计日志：`info!(post_id, operator_id, fields_changed, "文章更新成功")`（有 `info!`，但缺 `fields_changed`）：
 - [ ] 明确草稿 / 发布切换走同一接口，或单独提供 `PATCH /:id/status`（二选一并记录）。
 - [ ] 编写权限矩阵单元测试（作者 / editor / admin / viewer / 非协作者）。
 
 #### 1.2.4 端点暴露（Handler & Route 层）
 
-- [ ] 在 `post_handler.rs` 新增 `update_post`：
-  - [ ] `Path(id)` + `State` + `auth_user: AuthUser` + `Json(req)`。
-  - [ ] `req.validate()?`。
-  - [ ] 调用 `state.post_service.update_post(auth_user.id, id, req)`。
-- [ ] 在 `post_route.rs` 挂载：
+- [x] 在 `src/modules/post/handler.rs` 新增 `update_post`：
+  - [x] `Path(id)` + `State` + `auth_user: AuthUser` + `Json(req)`。
+  - [x] `req.validate()?`。
+  - [x] 调用 `state.post_service.update_post(auth_user.id, id, req)`。
+- [x] 在 `src/modules/post/route.rs` 挂载：
 
 ```rust
 .route("/{id}", patch(post_handler::update_post))
 ```
 
-- [ ] 确认最终路由为 `PATCH /api/v1/posts/:id`。
+- [x] 确认最终路由为 `PATCH /api/v1/posts/:id`。
 
 ---
 
@@ -342,7 +340,7 @@ pub async fn update_post(
 
 #### 1.3.1 分页请求与轻量契约（DTO 层）
 
-- [ ] 在 `src/models/dto/post.rs` 新增分页入参 `PostQuery`：
+- [ ] 在 `src/modules/post/dto.rs` 新增分页入参 `PostQuery`（可 `#[serde(flatten)]` 复用 `src/common/mod.rs` 里现成的 `PaginationQuery`，再补过滤字段）：
 
 ```rust
 #[derive(Debug, Deserialize)]
@@ -408,11 +406,11 @@ LIMIT $3 OFFSET $4
 
 #### 1.3.3 端点暴露（Handler & Route 层）
 
-- [ ] 在 `post_handler.rs` 新增 `list_posts`：
+- [ ] 在 `src/modules/post/handler.rs` 新增 `list_posts`：
   - [ ] `Query(query): Query<PostQuery>` + `State` + `optional_user: OptionalAuthUser`。
   - [ ] 判定检索模式：匿名 / 公开强制 `is_published = true`；已登录可选作者控制台。
   - [ ] 调用 service 层返回 `Paginated<PostListItemResp>`。
-- [ ] 在 `post_route.rs` 挂载：
+- [ ] 在 `src/modules/post/route.rs` 挂载：
 
 ```rust
 .route("/", get(post_handler::list_posts))
@@ -469,7 +467,7 @@ S3_UPLOAD_URL_TTL=900
 
 #### 2.1.2 直传凭证签发（DTO & Service 层）
 
-- [ ] 新增 `GetUploadUrlRequest` DTO（建议新建 `src/models/dto/media.rs`）：
+- [ ] 新增 `GetUploadUrlRequest` DTO（建议新建 `src/modules/media/dto.rs`）：
 
 ```rust
 #[derive(Debug, Deserialize, Validate)]
@@ -494,7 +492,7 @@ pub struct GetUploadUrlResponse {
 }
 ```
 
-- [ ] 新增 `MediaService`（`src/service/media_service.rs`），方法 `create_upload_url`：
+- [ ] 新增 `MediaService`（`src/modules/media/service.rs`），方法 `create_upload_url`：
   - [ ] 用 UUID 自动重命名文件：`object_key = format!("media/{}.{}", Uuid::new_v4(), sanitize_ext(&req.ext))`。
   - [ ] 对 `ext` 做严格清洗：去点、去 `/`、`\\`、`..`，仅保留 `[a-zA-Z0-9]+`，杜绝路径穿越。
   - [ ] 对 `content_type` 做白名单校验，非法返回 `AppError::BadRequest`。
@@ -504,11 +502,11 @@ pub struct GetUploadUrlResponse {
 
 #### 2.1.3 端点暴露（Handler & Route 层）
 
-- [ ] 新增 `src/handler/media_handler.rs`：
+- [ ] 新增 `src/modules/media/handler.rs`：
   - [ ] `create_upload_url(State, auth_user: AuthUser, Json(req))`。
   - [ ] `req.validate()?`。
   - [ ] 调用 `MediaService::create_upload_url`，返回 `Json(GetUploadUrlResponse)`。
-- [ ] 新增 `src/route/media_route.rs`：
+- [ ] 新增 `src/modules/media/route.rs`：
 
 ```rust
 pub fn media_routes() -> Router<AppState> {
@@ -819,12 +817,10 @@ create index idx_todo_reminders_pending on todo_reminders(fired, remind_at);
 
 #### 4.1.2 随机提醒生成算法
 
-- [ ] 在 `TodoService` 实现 `regenerate_reminders(todo)`：
-  - [ ] 入参：`reminder_period`（day / week / month）、`reminder_count`（N 次）、`reminder_window_start` / `end`（时间段）。
-  - [ ] 算法：
-    - [ ] 按周期划分时间跨度（当天 / 本周 / 本月）。
-    - [ ] 在该周期内、且落在 `window_start ~ window_end` 的可用时间段里，均匀 / 随机采样 `N` 个时间点。
-    - [ ] 每个时间点落库为一条 `todo_reminders`（`remind_at` 转 UTC）。
+- [ ] 在 `TodoService` 实现 `regenerate_reminders(todo)`。入参：`reminder_period`（day / week / month）、`reminder_count`（N 次）、`reminder_window_start` / `end`（时间段）。算法：
+  - [ ] 按周期划分时间跨度（当天 / 本周 / 本月）。
+  - [ ] 在该周期内、且落在 `window_start ~ window_end` 的可用时间段里，均匀 / 随机采样 `N` 个时间点。
+  - [ ] 每个时间点落库为一条 `todo_reminders`（`remind_at` 转 UTC）。
   - [ ] 周期结束（次日 / 下周 / 下月初）自动重新生成下一周期的随机时间点（由调度器每日兜底任务触发）。
 - [ ] 处理重复任务（`repeat_type != none`）：每天 / 工作日 / 休息日，完成状态在下一个周期开始时自动复位，`completed_count` 累计不清零。
 - [ ] 工作日 / 休息日判定基于用户 `timezone`（见 0.4）。

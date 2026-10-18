@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust 一年学习 · TODO 看板</title>
+<style>
+  :root {
+    --background: #fafafa;
+    --foreground: #1c1c1e;
+    --card: #ffffff;
+    --card-foreground: #1c1c1e;
+    --border: #e3e3e6;
+    --input: #e3e3e6;
+    --muted: #f2f2f4;
+    --muted-foreground: #6b7280;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --ring: #2563eb;
+    --font-size-base: 14px;
+  }
+  [data-theme="dark"] {
+    --background: #121214;
+    --foreground: #f4f4f5;
+    --card: #1b1b1f;
+    --card-foreground: #f4f4f5;
+    --border: #2c2c31;
+    --input: #2c2c31;
+    --muted: #232328;
+    --muted-foreground: #9ca3af;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --ring: #3b82f6;
+  }
+  /* 强调色方案 */
+  [data-accent="green"] { --primary: #10b981; --ring: #10b981; }
+  [data-accent="purple"] { --primary: #8b5cf6; --ring: #8b5cf6; }
+  [data-accent="orange"] { --primary: #f97316; --ring: #f97316; }
+  [data-accent="rose"] { --primary: #f43f5e; --ring: #f43f5e; }
+  [data-accent="teal"] { --primary: #14b8a6; --ring: #14b8a6; }
+  [data-theme="dark"][data-accent="green"] { --primary: #34d399; --ring: #34d399; }
+  [data-theme="dark"][data-accent="purple"] { --primary: #a78bfa; --ring: #a78bfa; }
+  [data-theme="dark"][data-accent="orange"] { --primary: #fb923c; --ring: #fb923c; }
+  [data-theme="dark"][data-accent="rose"] { --primary: #fb7185; --ring: #fb7185; }
+  [data-theme="dark"][data-accent="teal"] { --primary: #2dd4bf; --ring: #2dd4bf; }
+  /* 主题控制条 */
+  .theme-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .swatch.is-active {
+    border-color: var(--foreground);
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--foreground);
+  }
+  .swatch-blue { background: #3b82f6; }
+  .swatch-green { background: #10b981; }
+  .swatch-purple { background: #8b5cf6; }
+  .swatch-orange { background: #f97316; }
+  .swatch-rose { background: #f43f5e; }
+  .swatch-teal { background: #14b8a6; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: var(--font-size-base);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 16px; }
+  h2 { font-size: 17px; font-weight: 500; margin: 0 0 8px; }
+  h3 { font-size: 15px; font-weight: 500; margin: 0; }
+  code {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12.5px;
+  }
+  .card {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .progress {
+    height: 12px;
+    background: var(--muted);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 999px;
+    transition: width 0.25s ease;
+  }
+  .viz-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 16px;
+  }
+  .nav-link {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+  }
+  .nav-link:hover { border-color: var(--primary); }
+  .nav-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .form-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    margin: 0;
+  }
+  .form-check-input {
+    width: 15px;
+    height: 15px;
+    margin: 3px 0 0;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .form-check-label { flex: 1; }
+  .text-small { font-size: 12px; }
+  .text-muted { color: var(--muted-foreground); }
+  .text-nowrap { white-space: nowrap; }
+  .text-center { text-align: center; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .table-responsive { overflow-x: auto; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th, .table td {
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .table th { color: var(--muted-foreground); font-weight: 500; }
+  .table-sm th, .table-sm td { padding: 5px 8px; }
+  .footer-note {
+    margin-top: 20px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div id="rust-year-plan">
+  <style>
+    #rust-year-plan .week-block { margin-bottom: 12px; }
+    #rust-year-plan .week-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    #rust-year-plan .check-list { display: grid; gap: 5px; }
+    #rust-year-plan .check-list .form-check { margin-bottom: 0; }
+    #rust-year-plan .quarter-top { margin-bottom: 14px; }
+    #rust-year-plan .tb-cat { margin-bottom: 12px; }
+    #rust-year-plan .tb-cat .progress { margin-top: 8px; }
+    #rust-year-plan .branch-table { margin-top: 4px; }
+  </style>
+
+  <h1>Rust 一年学习 · TODO 看板</h1>
+
+  <div class="theme-bar">
+    <span class="text-muted text-small">主题</span>
+    <button id="btn-theme" class="nav-link" type="button">🌙 暗色</button>
+    <span class="text-muted text-small">强调色</span>
+    <button class="swatch swatch-blue is-active" data-accent="" aria-label="蓝色"></button>
+    <button class="swatch swatch-green" data-accent="green" aria-label="绿色"></button>
+    <button class="swatch swatch-purple" data-accent="purple" aria-label="紫色"></button>
+    <button class="swatch swatch-orange" data-accent="orange" aria-label="橙色"></button>
+    <button class="swatch swatch-rose" data-accent="rose" aria-label="玫红"></button>
+    <button class="swatch swatch-teal" data-accent="teal" aria-label="青色"></button>
+  </div>
+
+  <div class="card">
+    <div class="viz-row">
+      <span class="text-muted">总体进度</span>
+      <span class="tabular-nums text-small" id="ryp-overall-count">0 / 0</span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="总体进度" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar" id="ryp-overall-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="nav" role="tablist" aria-label="计划分区">
+    <button class="nav-link active" id="ryp-btn-q1" role="tab" aria-controls="ryp-panel-q1" aria-selected="true" type="button">Q1 · 13周 打地基</button>
+    <button class="nav-link" id="ryp-btn-q2" role="tab" aria-controls="ryp-panel-q2" aria-selected="false" type="button">Q2 · 13周 深潜+功能</button>
+    <button class="nav-link" id="ryp-btn-q3" role="tab" aria-controls="ryp-panel-q3" aria-selected="false" type="button">Q3 · 13周 生产力</button>
+    <button class="nav-link" id="ryp-btn-q4" role="tab" aria-controls="ryp-panel-q4" aria-selected="false" type="button">Q4 · 13周 交付</button>
+    <button class="nav-link" id="ryp-btn-tb" role="tab" aria-controls="ryp-panel-tb" aria-selected="false" type="button">工具包</button>
+    <button class="nav-link" id="ryp-btn-br" role="tab" aria-controls="ryp-panel-br" aria-selected="false" type="button">分支 B1–B15</button>
+  </div>
+
+  <div id="ryp-panel-q1" role="tabpanel" aria-labelledby="ryp-btn-q1" style="margin-top:12px"></div>
+  <div id="ryp-panel-q2" role="tabpanel" aria-labelledby="ryp-btn-q2" hidden style="margin-top:12px"></div>
+  <div id="ryp-panel-q3" role="tabpanel" aria-labelledby="ryp-btn-q3" hidden style="margin-top:12px"></div>
+  <div id="ryp-panel-q4" role="tabpanel" aria-labelledby="ryp-btn-q4" hidden style="margin-top:12px"></div>
+  <div id="ryp-panel-tb" role="tabpanel" aria-labelledby="ryp-btn-tb" hidden style="margin-top:12px"></div>
+  <div id="ryp-panel-br" role="tabpanel" aria-labelledby="ryp-btn-br" hidden style="margin-top:12px"></div>
+
+  <p class="footer-note">勾选进度保存在本浏览器的 localStorage 中（仅本机）。想重新开始：浏览器「清除网站数据」后刷新。主文档：<code>docs/学习计划.md</code></p>
+
+  <script>
+  (function () {
+    var root = document.getElementById('rust-year-plan');
+    var LS_KEY = 'rust-year-plan-checked';
+
+    var QUARTERS = [
+      { id: 'q1', name: 'Q1 · 第 1–13 周 · 打地基', weeks: [
+        { t: '第 1 周', items: ['收尾 post 模块改动（对照 TODO 第 1 章）', '【深】给 post 五层写「职责清单」'] },
+        { t: '第 2 周', items: ['写 UpdatePostRequest validator 测试（≥4 用例）', 'AuthUser 提取器三情形测试'] },
+        { t: '第 3 周', items: ['MockPostRepository + 可见性决策树测试（4 用例）', '【深】错误矩阵（输入 → AppError → 状态码）'] },
+        { t: '第 4 周', items: ['cargo fmt + clippy 全量跑', '记忆重构：todo 模块', '缺口记入 学习内容.md'] },
+        { t: '第 5 周', items: ['B5 三个实验（spawn 1000 / 顺序 await / 阻塞对比）'] },
+        { t: '第 6 周', items: ['读 tokio tutorial 的 Task 与 Blocking 节', '【深】生产者-消费者小程序（mpsc）'] },
+        { t: '第 7 周', items: ['B4：删 AppState 每个 Arc，记录编译错误', 'Argon2 spawn_blocking 改造实验'] },
+        { t: '第 8 周', items: ['B3：泛型 vs dyn 双版本 + vtable', '【深】泛型分页辅助函数 Paginated<T>'] },
+        { t: '第 9 周', items: ['读 axum extract.rs', '闭卷手写 OptionalAuthUser（含单测）', '【深】写自己的日志中间件（from_fn）'] },
+        { t: '第 10 周', items: ['B7：cargo expand 一条 query_as', '白板：请求生命周期图', '记忆重构：auth.rs'] },
+        { t: '第 11 周', items: ['通知模块：设计文档 + 测试先行', '【深】事务实验：原子性 + 死锁与锁顺序'] },
+        { t: '第 12 周', items: ['实现通知模块 + 前端验收页'] },
+        { t: '第 13 周', items: ['媒体直传：设计 + 实现（≥10 安全用例）', '三个旧模块补 service 层测试', 'Q1 验收：≥10 测试 + 调度图 + 讲清 vtable'] }
+      ]},
+      { id: 'q2', name: 'Q2 · 第 14–26 周 · 深潜 + 真实功能', weeks: [
+        { t: '第 14 周', items: ['【深】B11：mini 执行器（poll 循环 + Waker）'] },
+        { t: '第 15 周', items: ['【深】B12：生命周期省略规则 + 显式 ’a 标注'] },
+        { t: '第 16 周', items: ['【深】B13：批判三个 Repository trait + 写通知模块 trait 接口'] },
+        { t: '第 17 周', items: ['【深】B14：写 module_scaffold! 宏，生成真实模块骨架'] },
+        { t: '第 18 周', items: ['【深】B15：channel 实验（mpsc / oneshot / watch）', '读 tokio 调度器原理中文文章'] },
+        { t: '第 19 周', items: ['【深】写《我的博客后端是怎么工作的》v1（5000 字）'] },
+        { t: '第 20 周', items: ['语录模块：设计文档 + 测试先行'] },
+        { t: '第 21 周', items: ['语录模块：实现（多对多）', '【深】标签计数聚合查询（GROUP BY）'] },
+        { t: '第 22 周', items: ['语录模块：前端验收页'] },
+        { t: '第 23 周', items: ['阅读清单：设计文档', '【深】状态机：合法流转表 + 状态校验器'] },
+        { t: '第 24 周', items: ['阅读清单：实现 + 笔记归组（JOIN + group）+ 年度统计'] },
+        { t: '第 25 周', items: ['音乐播放器：设计 + 实现（多对多 + 排序）'] },
+        { t: '第 26 周', items: ['音乐播放器：聚合查询（GROUP BY）+ 匿名访问', 'Q2 验收：3 模块 + B11–B15 出口题 + 长文 v1'] }
+      ]},
+      { id: 'q3', name: 'Q3 · 第 27–39 周 · 生产力工具', weeks: [
+        { t: '第 27 周', items: ['引入 tokio-cron-scheduler + SchedulerService'] },
+        { t: '第 28 周', items: ['兜底任务：每分钟扫描过期通知', 'notifications 表 + NotificationService'] },
+        { t: '第 29 周', items: ['users.timezone + TimezoneHelper（chrono-tz）'] },
+        { t: '第 30 周', items: ['Todo 随机提醒生成算法（纯函数 + 测试矩阵）'] },
+        { t: '第 31 周', items: ['重复任务每日复位 + 工作日/休息日判定'] },
+        { t: '第 32 周', items: ['提醒触发接入调度器'] },
+        { t: '第 33 周', items: ['Anki：sm2_update 纯函数（4 分支）'] },
+        { t: '第 34 周', items: ['Anki：SM-2 单元测试矩阵', '【深】proptest 属性测试（SM-2 不变量）'] },
+        { t: '第 35 周', items: ['Anki：到期卡片列表 + 复习流程'] },
+        { t: '第 36 周', items: ['习惯打卡幂等 + calc_streak 纯函数（边界测试）'] },
+        { t: '第 37 周', items: ['目标 + 里程碑 CRUD + 到期提醒'] },
+        { t: '第 38 周', items: ['番茄钟开始 / 结束 / 中断 + 专注统计'] },
+        { t: '第 39 周', items: ['Q3 验收：6+ 模块 + 调度通知跑通 + 测试全绿'] }
+      ]},
+      { id: 'q4', name: 'Q4 · 第 40–52 周 · 交付', weeks: [
+        { t: '第 40 周', items: ['统计面板：DashboardService 聚合查询 + 维度切换'] },
+        { t: '第 41 周', items: ['GET /dashboard/summary + 前端图表'] },
+        { t: '第 42 周', items: ['数据导出：全量 JSON + 流式返回'] },
+        { t: '第 43 周', items: ['留言墙：发布 / 审核 / 回复 / 删除'] },
+        { t: '第 44 周', items: ['频率限制（tower 中间件）', '联系页 + Honeypot 防 spam'] },
+        { t: '第 45 周', items: ['个人资料字段对齐 + 头像上传'] },
+        { t: '第 46 周', items: ['修改密码（旧密码校验 + 重哈希）+ 会话管理'] },
+        { t: '第 47 周', items: ['离线同步：客户端 UUID + 幂等 upsert'] },
+        { t: '第 48 周', items: ['离线同步：增量拉取 since + 墓碑 + 版本裁决'] },
+        { t: '第 49 周', items: ['离线同步：last-write-wins + 审计日志', '前端 outbox 页面（SQLite + 队列）'] },
+        { t: '第 50 周', items: ['Dockerfile + compose + GitHub Actions CI', 'Nginx + HTTPS'] },
+        { t: '第 51 周', items: ['压测（wrk / hey）', 'EXPLAIN 找 1 个慢查询并优化'] },
+        { t: '第 52 周', items: ['【深】criterion 基准测试（sm2_update / calc_streak）', '深潜长文 v2', '重构收尾：README / .env.example / docs', '一年验收：clone ≤30 分钟 + 测试全绿 + 10 分钟讲全链路'] }
+      ]}
+    ];
+
+    var TOOLBOX = [
+      { name: 'std — Option / Result', items: ['map / and_then', 'unwrap_or / unwrap_or_default / expect', 'is_some / zip', 'Result::map_err / and_then', 'ok() / err() 构造', 'as_ref', 'From/Into 转换（? 的底层）'] },
+      { name: 'std — 迭代器（最重要）', items: ['map / filter / filter_map', 'fold / reduce', 'collect', 'take / skip / take_while', 'chain / zip', 'find / find_map / position', 'any / all', 'partition', 'enumerate', 'count / sum', 'min_by / max_by'] },
+      { name: 'std — 集合与字符串', items: ['Vec push / pop / insert / remove', 'Vec retain / drain / resize', 'Vec iter / iter_mut / as_slice', 'String push_str / insert / replace', 'String trim / split / to_uppercase', 'HashMap insert / get / remove / contains_key', 'HashMap entry().or_insert()', 'BTreeMap range', 'format! 宏', 'char is_ascii_alphanumeric / to_digit'] },
+      { name: 'std — 时间', items: ['Instant::now() / elapsed()', 'Duration', 'std::time::sleep（阻塞，对照 tokio）'] },
+      { name: 'std — 线程与同步', items: ['thread::spawn / join', 'Mutex / RwLock', 'Arc', 'AtomicUsize::fetch_add', 'thread::scope'] },
+      { name: 'std — io / fs', items: ['fs::read_to_string / write', 'fs::read_dir / create_dir_all', 'BufReader 按行读取', 'io::Read / Write trait'] },
+      { name: 'tokio', items: ['spawn / join / join_all', 'spawn_blocking', 'time::sleep / interval', 'select! 宏', 'mpsc channel / unbounded_channel', 'oneshot', 'watch', 'Semaphore', 'tokio::sync::Mutex'] },
+      { name: 'axum', items: ['Router::new / route / nest', 'with_state / from_ref', '提取器 State / Path / Query / Json', 'middleware::from_fn', 'Extension', 'into_make_service + serve'] },
+      { name: 'sqlx', items: ['query / query_as / query_scalar', 'fetch_one / fetch_all / fetch_optional', 'execute', 'pool.acquire', '事务 begin / commit / rollback', 'sqlx::migrate!', 'query_builder'] },
+      { name: 'serde', items: ['derive(Serialize, Deserialize)', 'rename / rename_all', 'default / skip', 'flatten', 'to_value / from_value', 'to_string / from_str'] },
+      { name: 'chrono / uuid', items: ['Utc::now() / DateTime<Utc>', 'NaiveDate / NaiveTime', 'with_timezone', 'format / parse', 'Duration / signed_duration_since', 'Uuid::new_v4() / parse_str'] },
+      { name: 'thiserror / anyhow', items: ['#[derive(Error)] + #[error]', '#[from]', 'anyhow! / bail!', '.context()'] },
+      { name: 'tracing', items: ['info! / warn! / error!', 'span! / #[instrument]', 'subscriber 初始化 + EnvFilter'] },
+      { name: 'tower-http', items: ['TraceLayer', 'CorsLayer', 'CompressionLayer', 'request_id'] }
+    ];
+
+    var BRANCHES = [
+      { id: 'B1', name: '所有权与借用', hours: 3, entry: 'Q1 随时' },
+      { id: 'B2', name: 'Result / ? / 错误传播', hours: 2, entry: 'Q1' },
+      { id: 'B3', name: '泛型 vs trait object', hours: 3, entry: 'Q1' },
+      { id: 'B4', name: 'Arc 与共享状态', hours: 2, entry: 'Q1' },
+      { id: 'B5', name: 'async 任务调度', hours: 4, entry: 'Q1（最重要）' },
+      { id: 'B6', name: 'axum 提取器机制', hours: 3, entry: 'Q1' },
+      { id: 'B7', name: 'sqlx 宏机制', hours: 2, entry: 'Q1' },
+      { id: 'B8', name: '测试与 mock', hours: 3, entry: 'Q1' },
+      { id: 'B9', name: 'SQL 与索引', hours: 2, entry: 'Q2' },
+      { id: 'B10', name: '设计放置决策', hours: 3, entry: 'Q2' },
+      { id: 'B11', name: 'Future 状态机深潜', hours: 4, entry: 'Q2（需先过 B5）' },
+      { id: 'B12', name: '生命周期标注', hours: 3, entry: 'Q2' },
+      { id: 'B13', name: 'trait 设计', hours: 3, entry: 'Q2' },
+      { id: 'B14', name: 'macro_rules 宏', hours: 4, entry: 'Q2' },
+      { id: 'B15', name: '并发原语', hours: 3, entry: 'Q2（需先过 B5）' }
+    ];
+
+    var ALL = [];
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function weekId(q, wi, ii) { return q.id + '-w' + wi + '-' + ii; }
+    function tbId(ci, ii) { return 'tb-' + ci + '-' + ii; }
+    function brId(b) { return 'br-' + b.id; }
+
+    var checked = new Set();
+    try {
+      var raw = null;
+      if (window.zcode && window.zcode.widgetState && window.zcode.widgetState.modelContent) {
+        raw = window.zcode.widgetState.modelContent;
+      } else {
+        raw = localStorage.getItem(LS_KEY);
+      }
+      if (raw) {
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) checked = new Set(arr);
+      }
+    } catch (e) {}
+
+    function persist() {
+      var data = JSON.stringify(Array.from(checked));
+      try { localStorage.setItem(LS_KEY, data); } catch (e) {}
+      if (window.zcode && window.zcode.setWidgetState) {
+        window.zcode.setWidgetState({ modelContent: data }).catch(function () {});
+      }
+    }
+
+    // 主题（独立版）
+    var THEME_KEY = 'rust-year-plan-theme';
+    var ACCENT_KEY = 'rust-year-plan-accent';
+    var htmlEl = document.documentElement;
+    var btnTheme = document.getElementById('btn-theme');
+    function currentTheme() {
+      var t = null;
+      try { t = localStorage.getItem(THEME_KEY); } catch (e) {}
+      if (t === 'light' || t === 'dark') return t;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    function applyTheme(mode) {
+      htmlEl.setAttribute('data-theme', mode);
+      btnTheme.textContent = mode === 'dark' ? '☀️ 亮色' : '🌙 暗色';
+    }
+    function applyAccent(name) {
+      if (name) htmlEl.setAttribute('data-accent', name);
+      else htmlEl.removeAttribute('data-accent');
+      root.querySelectorAll('.swatch').forEach(function (s) {
+        s.classList.toggle('is-active', (s.getAttribute('data-accent') || '') === (name || ''));
+      });
+    }
+    applyTheme(currentTheme());
+    var savedAccent = null;
+    try { savedAccent = localStorage.getItem(ACCENT_KEY); } catch (e) {}
+    applyAccent(savedAccent || '');
+    btnTheme.addEventListener('click', function () {
+      var next = htmlEl.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    });
+    root.querySelectorAll('.swatch').forEach(function (s) {
+      s.addEventListener('click', function () {
+        var a = s.getAttribute('data-accent') || '';
+        applyAccent(a);
+        try { localStorage.setItem(ACCENT_KEY, a); } catch (e) {}
+      });
+    });
+
+    function renderQuarter(q, panelId) {
+      var panel = document.getElementById(panelId);
+      var html = '<div class="quarter-top"><div class="week-head"><h2>' + esc(q.name) + '</h2></div>' +
+        '<div class="progress" role="progressbar" aria-label="' + esc(q.name) + ' 进度" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">' +
+        '<div class="progress-bar" data-qbar="' + q.id + '" style="width:0%"></div></div></div>';
+      q.weeks.forEach(function (wk, wi) {
+        var rows = wk.items.map(function (it, ii) {
+          var id = weekId(q, wi, ii);
+          ALL.push(id);
+          var on = checked.has(id);
+          return '<label class="form-check"><input class="form-check-input" type="checkbox" data-id="' + id + '"' + (on ? ' checked' : '') + '>' +
+            '<span class="form-check-label">' + esc(it) + '</span></label>';
+        }).join('');
+        html += '<div class="card week-block"><div class="week-head"><h3>' + esc(wk.t) + '</h3>' +
+          '<span class="text-small text-muted tabular-nums" data-wcount="' + q.id + '-w' + wi + '">0/' + wk.items.length + '</span></div>' +
+          '<div class="check-list">' + rows + '</div></div>';
+      });
+      panel.innerHTML = html;
+    }
+
+    function renderToolbox() {
+      var panel = document.getElementById('ryp-panel-tb');
+      var html = '';
+      TOOLBOX.forEach(function (cat, ci) {
+        var rows = cat.items.map(function (it, ii) {
+          var id = tbId(ci, ii);
+          ALL.push(id);
+          var on = checked.has(id);
+          return '<label class="form-check"><input class="form-check-input" type="checkbox" data-id="' + id + '"' + (on ? ' checked' : '') + '>' +
+            '<span class="form-check-label">' + esc(it) + '</span></label>';
+        }).join('');
+        html += '<div class="card tb-cat"><div class="week-head"><h3>' + esc(cat.name) + '</h3>' +
+          '<span class="text-small text-muted tabular-nums" data-tbcount="' + ci + '">0/' + cat.items.length + '</span></div>' +
+          '<div class="check-list">' + rows + '</div>' +
+          '<div class="progress" role="progressbar" aria-label="' + esc(cat.name) + ' 进度" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">' +
+          '<div class="progress-bar" data-tbbar="' + ci + '" style="width:0%"></div></div></div>';
+      });
+      panel.innerHTML = html;
+    }
+
+    function renderBranches() {
+      var panel = document.getElementById('ryp-panel-br');
+      var rows = BRANCHES.map(function (b) {
+        var id = brId(b);
+        ALL.push(id);
+        var on = checked.has(id);
+        return '<tr><td><code>' + b.id + '</code></td><td>' + esc(b.name) + '</td>' +
+          '<td class="text-nowrap tabular-nums">' + b.hours + 'h</td><td class="text-nowrap">' + esc(b.entry) + '</td>' +
+          '<td class="text-center"><input class="form-check-input" type="checkbox" data-id="' + id + '"' +
+          ' aria-label="' + b.id + ' 出口题通过"' + (on ? ' checked' : '') + '></td></tr>';
+      }).join('');
+      panel.innerHTML = '<div class="table-responsive branch-table"><table class="table table-sm">' +
+        '<thead><tr><th>ID</th><th>概念</th><th>时长</th><th>主线入口</th><th class="text-center">出口题通过</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function updateProgress() {
+      var total = 0, done = 0;
+      QUARTERS.forEach(function (q) {
+        var qd = 0, qt = 0;
+        q.weeks.forEach(function (wk, wi) {
+          var wd = 0;
+          wk.items.forEach(function (it, ii) {
+            var id = weekId(q, wi, ii);
+            total++; qt++;
+            if (checked.has(id)) { done++; qd++; wd++; }
+          });
+          var el = root.querySelector('[data-wcount="' + q.id + '-w' + wi + '"]');
+          if (el) el.textContent = wd + '/' + wk.items.length;
+        });
+        var bar = root.querySelector('[data-qbar="' + q.id + '"]');
+        if (bar) {
+          var pct = qt ? Math.round(100 * qd / qt) : 0;
+          bar.style.width = pct + '%';
+          bar.parentElement.setAttribute('aria-valuenow', pct);
+        }
+      });
+      TOOLBOX.forEach(function (cat, ci) {
+        var cd = 0;
+        cat.items.forEach(function (it, ii) {
+          total++;
+          if (checked.has(tbId(ci, ii))) { done++; cd++; }
+        });
+        var el = root.querySelector('[data-tbcount="' + ci + '"]');
+        if (el) el.textContent = cd + '/' + cat.items.length;
+        var bar = root.querySelector('[data-tbbar="' + ci + '"]');
+        if (bar) {
+          var pct = Math.round(100 * cd / cat.items.length);
+          bar.style.width = pct + '%';
+          bar.parentElement.setAttribute('aria-valuenow', pct);
+        }
+      });
+      BRANCHES.forEach(function (b) {
+        total++;
+        if (checked.has(brId(b))) done++;
+      });
+      var pctAll = total ? Math.round(100 * done / total) : 0;
+      var ob = document.getElementById('ryp-overall-bar');
+      ob.style.width = pctAll + '%';
+      ob.parentElement.setAttribute('aria-valuenow', pctAll);
+      document.getElementById('ryp-overall-count').textContent = done + ' / ' + total;
+    }
+
+    // 标签页切换（独立版自己实现）
+    var tabs = root.querySelectorAll('.nav-link');
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        tabs.forEach(function (b) {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        var panels = root.querySelectorAll('[role="tabpanel"]');
+        panels.forEach(function (p) { p.hidden = true; });
+        var target = document.getElementById(btn.getAttribute('aria-controls'));
+        if (target) target.hidden = false;
+      });
+    });
+
+    root.addEventListener('change', function (e) {
+      var inp = e.target;
+      if (inp && inp.matches && inp.matches('input[data-id]')) {
+        if (inp.checked) checked.add(inp.getAttribute('data-id'));
+        else checked.delete(inp.getAttribute('data-id'));
+        persist();
+        updateProgress();
+      }
+    });
+
+    window.addEventListener('zcode:set_globals', function (e) {
+      var ws = e.detail && e.detail.globals && e.detail.globals.widgetState;
+      if (ws && ws.modelContent) {
+        try {
+          var arr = JSON.parse(ws.modelContent);
+          if (Array.isArray(arr)) { checked = new Set(arr); updateProgress(); }
+        } catch (err) {}
+      }
+    });
+
+    QUARTERS.forEach(function (q, i) { renderQuarter(q, 'ryp-panel-q' + (i + 1)); });
+    renderToolbox();
+    renderBranches();
+    updateProgress();
+  })();
+  </script>
+</div>
+</div>
+</body>
+</html>

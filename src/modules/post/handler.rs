@@ -5,7 +5,7 @@ use validator::Validate;
 
 use crate::{
     error::AppError,
-    extractors::AuthUser,
+    extractors::{AuthUser, OptionalAuthUser},
     modules::post::dto::{CreatePostRequest, UpdatePostRequest},
     state::AppState,
 };
@@ -45,4 +45,16 @@ pub async fn update_post(
     let resp = state.post_service.update_post(auth_user.id, post_id, &req).await?;
     // 3. 返回 200 OK 与 JSON 载荷
     Ok(Json(resp))
+}
+
+// 根据文章ID查询接口：GET /api/v1/posts/{id}
+pub async fn get_post_by_id(
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    OptionalAuthUser(auth_user): OptionalAuthUser,
+) -> Result<impl IntoResponse, AppError> {
+    // 提取当前用户id
+    let current_user_id = auth_user.map(|u| u.id);
+    let post = state.post_service.get_post_by_id(post_id, current_user_id).await?;
+    Ok(Json(post))
 }

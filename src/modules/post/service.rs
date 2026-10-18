@@ -50,4 +50,30 @@ impl PostService {
         info!(post_id = %post.id, author_id = %author_id, "文章更新成功");
         Ok(PostResponse::from(post))
     }
+    // 根据id ID 查询文章业务
+    #[tracing::instrument(skip(self))]
+    /// current_user_id 是当前用户的ID，用于判断是否有权限查看该文章 未登录时为None
+    pub async fn get_post_by_id(
+        &self,
+        post_id: Uuid,
+        current_user_id: Option<Uuid>,
+    ) -> Result<PostResponse, AppError> {
+        let post = self
+            .post_repo
+            .find_by_id(post_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("文章不存在".to_string()))?;
+        // 判断权限
+        if !post.is_published {
+            let is_author = current_user_id == Some(post.author_id);
+            if !is_author {
+                // 统一返回 404，防止外部通过 403 探测私密文章的存在性
+                return Err(AppError::NotFound("文章未发布".to_string()));
+            }
+        }
+        // 实体转换为DTO 并返回
+        Ok(PostResponse::from(post))
+    }
 }
+
+
