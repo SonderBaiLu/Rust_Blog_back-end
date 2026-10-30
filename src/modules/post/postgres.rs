@@ -23,7 +23,7 @@ impl PostRepository for PgPostRepository {
     //  根据文章id 查询文章
     async fn find_by_id(&self, post: Uuid) -> Result<Option<Post>, AppError>{
         let post = sqlx::query_as::<Postgres, Post>(
-            r#" select * from posts where id = $1 and delete_at is null "#,
+            r#" select * from posts where id = $1 and deleted_at is null "#,
         )
             .bind(&post)
             .fetch_optional(&self.pool).await?;
