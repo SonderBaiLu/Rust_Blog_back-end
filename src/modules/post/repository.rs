@@ -32,4 +32,7 @@ pub trait PostRepository: Send + Sync {
     /// 如果文章不存在 权限不够 则会返回`AppError`
     async fn find_by_id(&self,post: Uuid) -> Result<Option<Post>, AppError>;
     // 分页查询文章 可以选择每页显示  5条10条100条/每页
+    // 软删除
+    async fn soft_delete_post(&self, id:Uuid) -> Result<(), AppError>;
+    
 }

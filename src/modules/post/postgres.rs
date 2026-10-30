@@ -21,12 +21,13 @@ impl PgPostRepository {
 #[async_trait]
 impl PostRepository for PgPostRepository {
     //  根据文章id 查询文章
-    async fn find_by_id(&self, post: Uuid) -> Result<Option<Post>, AppError>{
+    async fn find_by_id(&self, post: Uuid) -> Result<Option<Post>, AppError> {
         let post = sqlx::query_as::<Postgres, Post>(
             r#" select * from posts where id = $1 and deleted_at is null "#,
         )
-            .bind(&post)
-            .fetch_optional(&self.pool).await?;
+        .bind(&post)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(post)
     }
     async fn create_post(
@@ -48,19 +49,24 @@ impl PostRepository for PgPostRepository {
             RETURNING *
             "#,
         )
-            .bind(author_id)
-            .bind(&req.title)
-            .bind(&req.summary)
-            .bind(&req.content)
-            .bind(&req.cover_image)
-            .bind(req.is_published)
-            .fetch_one(&self.pool)
-            .await?;
+        .bind(author_id)
+        .bind(&req.title)
+        .bind(&req.summary)
+        .bind(&req.content)
+        .bind(&req.cover_image)
+        .bind(req.is_published)
+        .fetch_one(&self.pool)
+        .await?;
 
         Ok(post)
     }
     // 更新文章
-    async fn update_post(&self,post:Uuid,author_id: Uuid, req: &UpdatePostRequest) -> Result<Post, AppError> {
+    async fn update_post(
+        &self,
+        post: Uuid,
+        author_id: Uuid,
+        req: &UpdatePostRequest,
+    ) -> Result<Post, AppError> {
         let post = sqlx::query_as::<Postgres, Post>(
             // COALESCE(NULL, title) 会自动回退并保持数据库原有的 title 不变；若传了新值，则更新为新值。
             r#" update posts set
@@ -73,15 +79,26 @@ impl PostRepository for PgPostRepository {
                   where id = $6 and author_id = $7 and deleted_at is null
                   returning * "#,
         )
-            .bind(&req.title)
-            .bind(&req.summary)
-            .bind(&req.content)
-            .bind(&req.cover_image)
-            .bind(&req.is_published)
-            .bind(&post)
-            .bind(&author_id)
-            .fetch_one(&self.pool).await?;
+        .bind(&req.title)
+        .bind(&req.summary)
+        .bind(&req.content)
+        .bind(&req.cover_image)
+        .bind(req.is_published)
+        .bind(post)
+        .bind(author_id)
+        .fetch_one(&self.pool)
+        .await?;
         Ok(post)
-
+    }
+    // 删除文章
+    async fn soft_delete_post(&self, id: Uuid) -> Result<(), AppError> {
+        let soft_delete_post = sqlx::query_as::<Postgres, Post>(
+            r#" update posts set deleted_at = now() where id = $1 returning * "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        println!("{:?}", soft_delete_post);
+        Ok(())
     }
 }
