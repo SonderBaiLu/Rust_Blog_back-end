@@ -4,9 +4,9 @@ use sqlx::PgPool;
 
 use crate::{
     modules::{
-        post::{postgres::PgPostRepository, PostService},
-        todo::{postgres::PgTodoRepository, TodoService},
-        user::{postgres::PgUserRepository, UserService},
+        post::{PostService, postgres::PgPostRepository},
+        todo::{TodoService, postgres::PgTodoRepository},
+        user::{UserService, postgres::PgUserRepository},
     },
     state::AppState,
 };

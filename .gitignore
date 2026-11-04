@@ -1,1 +1,4 @@
 /target
+
+# supsrc 运行时事件日志，不入库
+.supsrc/

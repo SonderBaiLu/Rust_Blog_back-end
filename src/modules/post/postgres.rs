@@ -25,7 +25,7 @@ impl PostRepository for PgPostRepository {
         let post = sqlx::query_as::<Postgres, Post>(
             r#" select * from posts where id = $1 and deleted_at is null "#,
         )
-        .bind(&post)
+        .bind(post)
         .fetch_optional(&self.pool)
         .await?;
         Ok(post)

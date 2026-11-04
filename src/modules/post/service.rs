@@ -16,8 +16,17 @@ impl PostService {
     pub fn new(post_repo: Arc<dyn PostRepository>) -> Self {
         Self { post_repo }
     }
+    /// 删除文章 - 软删除
+    #[tracing::instrument(skip(self))]
+    pub async fn soft_delete_post(&self, id:Uuid) -> Result<(), AppError>{
+        // 调用持久层软删除
+        self.post_repo.soft_delete_post(id).await?;
+        // 日志
+        info!("软删除文章成功: {}", id);
+        Ok(())
+    }
 
-    /// 创建文章业务流水线
+    /// 创建文章
     #[tracing::instrument(skip(self))]
     pub async fn create_post(
         &self,
